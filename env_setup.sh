@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 
 # =========================================================
-# macOS Robotics/CPP/Python Dev Environment Bootstrap
+# macOS Robotics / C++ / Python Dev Bootstrap
 #
-# Target:
+# Features
 #   - VSCode
 #   - C++
 #   - Python
 #   - ARM Cross Compile
-#   - Docker/OrbStack
+#   - Docker / OrbStack
 #   - Environment Migration
 #
-# Supported:
+# Supported
 #   - Apple Silicon
 #   - Intel Mac
 #
-# Usage:
+# Usage
 #   chmod +x bootstrap_dev_env.sh
 #   ./bootstrap_dev_env.sh
 #
@@ -28,12 +28,12 @@ echo " macOS Dev Environment Bootstrap"
 echo "====================================================="
 
 # =========================================================
-# Detect architecture
+# Detect Architecture
 # =========================================================
 
 ARCH=$(uname -m)
 
-echo "Detected architecture: ${ARCH}"
+echo "Architecture: ${ARCH}"
 
 if [[ "$ARCH" == "arm64" ]]; then
     BREW_PREFIX="/opt/homebrew"
@@ -46,6 +46,7 @@ fi
 # =========================================================
 
 if ! command -v brew &>/dev/null; then
+
     echo ""
     echo "Installing Homebrew..."
     echo ""
@@ -53,27 +54,27 @@ if ! command -v brew &>/dev/null; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
-echo ""
-echo "Configuring Homebrew shellenv..."
-echo ""
-
 eval "$(${BREW_PREFIX}/bin/brew shellenv)"
 
 # =========================================================
 # Update brew
 # =========================================================
 
+echo ""
+echo "Updating Homebrew..."
+echo ""
+
 brew update
 
 # =========================================================
-# Install core packages
+# Install Base Packages
 # =========================================================
 
 echo ""
 echo "Installing base packages..."
 echo ""
 
-brew install --cask \
+brew install \
     git \
     gh \
     wget \
@@ -97,51 +98,84 @@ brew install --cask \
     eigen \
     fmt \
     assimp \
-    cc-switch \
+    cc-swtich
 
 # =========================================================
 # Install VSCode
 # =========================================================
 
 echo ""
-echo "Installing VSCode..."
+echo "Checking VSCode..."
 echo ""
 
-brew install --cask visual-studio-code
+if brew list --cask visual-studio-code &>/dev/null; then
+
+    echo "VSCode already managed by Homebrew"
+
+    brew upgrade --cask visual-studio-code || true
+
+else
+
+    if [[ -d "/Applications/Visual Studio Code.app" ]]; then
+
+        echo "VSCode already exists in /Applications"
+        echo "Skipping installation"
+
+    else
+
+        echo "Installing VSCode..."
+
+        brew install --cask visual-studio-code
+    fi
+fi
 
 # =========================================================
 # Install OrbStack
 # =========================================================
 
 echo ""
-echo "Installing OrbStack..."
+echo "Checking OrbStack..."
 echo ""
 
-brew install --cask orbstack
+if brew list --cask orbstack &>/dev/null; then
+
+    echo "OrbStack already installed"
+
+    brew upgrade --cask orbstack || true
+
+else
+
+    brew install --cask orbstack
+fi
 
 # =========================================================
-# Install fonts
+# Fonts
 # =========================================================
 
-brew tap homebrew/cask-fonts
+echo ""
+echo "Installing Nerd Font..."
+echo ""
 
-brew install --cask font-meslo-lg-nerd-font
+brew tap homebrew/cask-fonts || true
+
+brew install --cask font-meslo-lg-nerd-font || true
 
 # =========================================================
-# Install Oh My Zsh
+# Oh My Zsh
 # =========================================================
 
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+
     echo ""
     echo "Installing Oh My Zsh..."
     echo ""
 
     RUNZSH=no CHSH=no \
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 fi
 
 # =========================================================
-# Configure shell
+# Configure Shell
 # =========================================================
 
 echo ""
@@ -180,7 +214,7 @@ eval "\$(pyenv init - zsh)"
 export UV_LINK_MODE=copy
 
 # =========================================================
-# CCache
+# ccache
 # =========================================================
 
 export CCACHE_DIR="\$HOME/.ccache"
@@ -199,8 +233,9 @@ alias ll="ls -lah"
 alias gs="git status"
 alias gc="git commit"
 alias gp="git push"
-alias croot="cd ~/workspace"
 alias cls="clear"
+
+alias croot="cd ~/workspace"
 
 EOF
 
@@ -208,7 +243,7 @@ grep -q ".dev_env_exports" "$HOME/.zshrc" || \
 echo "source ~/.dev_env_exports" >> "$HOME/.zshrc"
 
 # =========================================================
-# Install Python
+# Python
 # =========================================================
 
 echo ""
@@ -227,7 +262,7 @@ fi
 pyenv global 3.12
 
 # =========================================================
-# Create workspace
+# Workspace
 # =========================================================
 
 echo ""
@@ -240,26 +275,28 @@ mkdir -p ~/workspace/cpp
 mkdir -p ~/workspace/python
 mkdir -p ~/workspace/robotics
 
+mkdir -p ~/workspace/docker
 mkdir -p ~/workspace/toolchains
 mkdir -p ~/workspace/sysroots
-mkdir -p ~/workspace/docker
 mkdir -p ~/workspace/scripts
 
 mkdir -p ~/dotfiles
 
 # =========================================================
-# Create default CMake toolchain
+# ARM Toolchain
 # =========================================================
 
 echo ""
-echo "Creating ARM toolchain..."
+echo "Creating ARM toolchain template..."
 echo ""
 
 cat > ~/workspace/toolchains/aarch64-linux-gnu.cmake <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
+
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
 set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+
 set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -267,7 +304,7 @@ set(CMAKE_CXX_STANDARD 17)
 EOF
 
 # =========================================================
-# Create Dockerfile
+# Dockerfile
 # =========================================================
 
 echo ""
@@ -299,11 +336,11 @@ CMD ["/bin/bash"]
 EOF
 
 # =========================================================
-# Create VSCode settings
+# VSCode Settings
 # =========================================================
 
 echo ""
-echo "Creating VSCode settings..."
+echo "Configuring VSCode..."
 echo ""
 
 mkdir -p "$HOME/Library/Application Support/Code/User"
@@ -334,22 +371,37 @@ cat > "$HOME/Library/Application Support/Code/User/settings.json" <<EOF
 EOF
 
 # =========================================================
-# Install VSCode extensions
+# VSCode Extensions
 # =========================================================
 
 echo ""
 echo "Installing VSCode extensions..."
 echo ""
 
-code --install-extension llvm-vs-code-extensions.vscode-clangd || true
-code --install-extension ms-vscode.cmake-tools || true
-code --install-extension ms-python.python || true
-code --install-extension charliermarsh.ruff || true
-code --install-extension ms-azuretools.vscode-docker || true
-code --install-extension eamodio.gitlens || true
+if command -v code &>/dev/null; then
+
+    code --install-extension llvm-vs-code-extensions.vscode-clangd || true
+    code --install-extension ms-vscode.cmake-tools || true
+    code --install-extension ms-python.python || true
+    code --install-extension charliermarsh.ruff || true
+    code --install-extension ms-azuretools.vscode-docker || true
+    code --install-extension eamodio.gitlens || true
+
+else
+
+    echo ""
+    echo "'code' command not found"
+    echo ""
+    echo "Open VSCode and run:"
+    echo ""
+    echo "Cmd + Shift + P"
+    echo ""
+    echo "Shell Command: Install 'code' command in PATH"
+    echo ""
+fi
 
 # =========================================================
-# Brewfile export
+# Brewfile
 # =========================================================
 
 echo ""
@@ -357,10 +409,11 @@ echo "Generating Brewfile..."
 echo ""
 
 cd ~
+
 brew bundle dump --force
 
 # =========================================================
-# Git config
+# Git Config
 # =========================================================
 
 if [[ ! -f "$HOME/.gitconfig" ]]; then
@@ -384,7 +437,7 @@ EOF
 fi
 
 # =========================================================
-# Create bootstrap migration script
+# Restore Script
 # =========================================================
 
 cat > ~/workspace/scripts/restore_env.sh <<EOF
@@ -392,7 +445,7 @@ cat > ~/workspace/scripts/restore_env.sh <<EOF
 
 set -e
 
-echo "Restoring environment..."
+echo "Restoring development environment..."
 
 brew bundle
 
@@ -404,7 +457,7 @@ EOF
 chmod +x ~/workspace/scripts/restore_env.sh
 
 # =========================================================
-# Final output
+# Final Output
 # =========================================================
 
 echo ""
@@ -413,7 +466,7 @@ echo " Environment setup completed"
 echo "====================================================="
 echo ""
 
-echo "Next steps:"
+echo "Next Steps:"
 echo ""
 echo "1. Restart terminal"
 echo ""
