@@ -111,6 +111,55 @@ if ! command -v fd &>/dev/null && command -v fdfind &>/dev/null; then
 fi
 
 # =========================================================
+# Install Node.js (required for Claude Code & Codex CLI)
+# =========================================================
+
+echo ""
+echo "Installing Node.js..."
+echo ""
+
+if command -v node &>/dev/null; then
+    echo "Node.js already installed: $(node --version)"
+else
+    # Use NodeSource LTS (22.x)
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt install -y nodejs
+fi
+
+echo "Node.js:  $(node --version)"
+echo "npm:      $(npm --version)"
+
+# =========================================================
+# Install Claude Code (Anthropic)
+# =========================================================
+
+echo ""
+echo "Installing Claude Code..."
+echo ""
+
+if command -v claude &>/dev/null; then
+    echo "Claude Code already installed"
+    npm update -g @anthropic-ai/claude-code || true
+else
+    npm install -g @anthropic-ai/claude-code
+fi
+
+# =========================================================
+# Install Codex CLI (OpenAI)
+# =========================================================
+
+echo ""
+echo "Installing Codex CLI..."
+echo ""
+
+if command -v codex &>/dev/null; then
+    echo "Codex CLI already installed"
+    npm update -g @openai/codex || true
+else
+    npm install -g @openai/codex
+fi
+
+# =========================================================
 # Install uv (Python package manager)
 # =========================================================
 
@@ -281,6 +330,18 @@ alias cls="clear"
 alias croot="cd ~/workspace"
 
 alias fd="fdfind"
+
+# =========================================================
+# Claude Code
+# =========================================================
+
+export CLAUDE_CODE_DISABLE_TELEMETRY=true
+
+# =========================================================
+# Codex CLI
+# =========================================================
+
+export CODEX_DISABLE_TELEMETRY=true
 
 EOF
 
@@ -577,6 +638,22 @@ if command -v code &>/dev/null; then
     code --install-extension eamodio.gitlens
 fi
 
+# Install Node.js
+if ! command -v node &>/dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt install -y nodejs
+fi
+
+# Install Claude Code
+if ! command -v claude &>/dev/null; then
+    npm install -g @anthropic-ai/claude-code
+fi
+
+# Install Codex CLI
+if ! command -v codex &>/dev/null; then
+    npm install -g @openai/codex
+fi
+
 # Install uv
 if ! command -v uv &>/dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -605,6 +682,9 @@ echo "1. Log out and back in (docker group + shell)"
 echo ""
 echo "2. Verify:"
 echo ""
+echo "   node --version"
+echo "   claude --version"
+echo "   codex --version"
 echo "   python3 --version"
 echo "   clang++ --version"
 echo "   cmake --version"
