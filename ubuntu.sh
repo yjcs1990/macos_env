@@ -83,6 +83,7 @@ sudo apt install -y \
     ripgrep \
     fd-find \
     fzf \
+    zsh \
     cmake \
     ninja-build \
     clang \
@@ -100,6 +101,9 @@ sudo apt install -y \
     libassimp-dev \
     libglfw3-dev \
     libglm-dev \
+    libgtk-3-0 \
+    libwebkit2gtk-4.1-0 \
+    libayatana-appindicator3-1 \
     ca-certificates \
     gnupg \
     lsb-release \
@@ -139,9 +143,42 @@ echo ""
 
 if command -v claude &>/dev/null; then
     echo "Claude Code already installed"
-    npm update -g @anthropic-ai/claude-code || true
+    sudo npm update -g @anthropic-ai/claude-code || true
 else
-    npm install -g @anthropic-ai/claude-code
+    sudo npm install -g @anthropic-ai/claude-code
+fi
+
+# =========================================================
+# Install cc-switch
+# =========================================================
+
+echo ""
+echo "Installing cc-switch..."
+echo ""
+
+if command -v cc-switch &>/dev/null; then
+    echo "cc-switch already installed"
+else
+    CC_SWITCH_ARCH="$(dpkg --print-architecture)"
+    CC_SWITCH_TMP_DIR=$(mktemp -d)
+    CC_SWITCH_DEB_URL=$(curl -fsSL https://api.github.com/repos/farion1231/cc-switch/releases/latest | jq -r --arg arch "$CC_SWITCH_ARCH" '.assets[] | select(.name | endswith("-Linux-" + $arch + ".deb")) | .browser_download_url' | head -n 1)
+
+    if [[ -n "$CC_SWITCH_DEB_URL" && "$CC_SWITCH_DEB_URL" != "null" ]]; then
+        CC_SWITCH_DEB_PATH="$CC_SWITCH_TMP_DIR/$(basename "$CC_SWITCH_DEB_URL")"
+        echo "Downloading cc-switch release package for $CC_SWITCH_ARCH..."
+        curl -fL "$CC_SWITCH_DEB_URL" -o "$CC_SWITCH_DEB_PATH"
+        sudo apt update
+        sudo apt install -y "$CC_SWITCH_DEB_PATH" || {
+            echo "WARNING: cc-switch package dependencies could not be resolved for $CC_SWITCH_ARCH."
+            echo "If you are on Ubuntu arm64, the upstream package may depend on libraries unavailable in your current APT sources."
+            echo "See: https://github.com/farion1231/cc-switch/releases"
+        }
+        rm -rf "$CC_SWITCH_TMP_DIR"
+    else
+        rm -rf "$CC_SWITCH_TMP_DIR"
+        echo "WARNING: could not find a cc-switch .deb asset matching architecture: $CC_SWITCH_ARCH"
+        echo "Install it manually from: https://github.com/farion1231/cc-switch/releases"
+    fi
 fi
 
 # =========================================================
@@ -154,9 +191,9 @@ echo ""
 
 if command -v codex &>/dev/null; then
     echo "Codex CLI already installed"
-    npm update -g @openai/codex || true
+    sudo npm update -g @openai/codex || true
 else
-    npm install -g @openai/codex
+    sudo npm install -g @openai/codex
 fi
 
 # =========================================================
@@ -213,11 +250,10 @@ else
 
     sudo install -m 0755 -d /etc/apt/keyrings
 
-    if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
-        sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-            -o /etc/apt/keyrings/docker.gpg
-        sudo chmod a+r /etc/apt/keyrings/docker.gpg
-    fi
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.asc
+    gpg --dearmor /tmp/docker.asc
+    sudo install -o root -g root -m 644 /tmp/docker.asc.gpg /etc/apt/keyrings/docker.gpg
+    rm -f /tmp/docker.asc /tmp/docker.asc.gpg
 
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
@@ -273,8 +309,6 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
     echo ""
     echo "Installing Oh My Zsh..."
     echo ""
-
-    sudo apt install -y zsh
 
     RUNZSH=no CHSH=no \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
@@ -348,6 +382,26 @@ EOF
 # Append source line to .zshrc if not already there
 grep -q ".dev_env_exports" "$HOME/.zshrc" 2>/dev/null || \
     echo "source ~/.dev_env_exports" >> "$HOME/.zshrc"
+
+ZSH_PATH="$(command -v zsh || true)"
+CURRENT_SHELL="$(getent passwd "$USER" | cut -d: -f7 2>/dev/null || true)"
+
+if [[ -n "$ZSH_PATH" ]]; then
+    if grep -qx "$ZSH_PATH" /etc/shells 2>/dev/null; then
+        if [[ "$CURRENT_SHELL" != "$ZSH_PATH" ]]; then
+            echo "Switching default shell to zsh..."
+            chsh -s "$ZSH_PATH" "$USER" || sudo chsh -s "$ZSH_PATH" "$USER"
+            echo "Default shell updated to $ZSH_PATH"
+            echo "Log out and back in for the shell change to take effect."
+        else
+            echo "Default shell already set to zsh: $ZSH_PATH"
+        fi
+    else
+        echo "WARNING: $ZSH_PATH is not listed in /etc/shells; skipping default shell switch."
+    fi
+else
+    echo "WARNING: zsh not found on PATH; skipping default shell switch."
+fi
 
 # =========================================================
 # Python venvs
@@ -545,14 +599,21 @@ echo ""
 echo "Installing VSCode extensions..."
 echo ""
 
+CODE_BIN=""
 if command -v code &>/dev/null; then
+    CODE_BIN="$(command -v code)"
+elif [[ -x "/usr/bin/code" ]]; then
+    CODE_BIN="/usr/bin/code"
+fi
 
-    code --install-extension llvm-vs-code-extensions.vscode-clangd || true
-    code --install-extension ms-vscode.cmake-tools || true
-    code --install-extension ms-python.python || true
-    code --install-extension charliermarsh.ruff || true
-    code --install-extension ms-azuretools.vscode-docker || true
-    code --install-extension eamodio.gitlens || true
+if [[ -n "$CODE_BIN" ]]; then
+
+    "$CODE_BIN" --install-extension llvm-vs-code-extensions.vscode-clangd || true
+    "$CODE_BIN" --install-extension ms-vscode.cmake-tools || true
+    "$CODE_BIN" --install-extension ms-python.python || true
+    "$CODE_BIN" --install-extension charliermarsh.ruff || true
+    "$CODE_BIN" --install-extension ms-azuretools.vscode-docker || true
+    "$CODE_BIN" --install-extension eamodio.gitlens || true
 
 else
 
@@ -572,14 +633,16 @@ echo "Generating package list..."
 echo ""
 
 # Export explicitly-installed packages for future restoration
-comm -23 \
-    <(apt-mark showmanual | sort) \
-    <(gzip -dc /var/log/installer/initial-status.gz 2>/dev/null | \
-      sed -n 's/^Package: //p' | sort) \
-    > ~/workspace/scripts/pkglist.txt 2>/dev/null || \
-
-# Fallback: just dump all manual packages
-apt-mark showmanual | sort > ~/workspace/scripts/pkglist.txt
+if command -v bash &>/dev/null; then
+    bash -lc '
+        set -o pipefail
+        comm -23 \
+            <(apt-mark showmanual | sort) \
+            <(gzip -dc /var/log/installer/initial-status.gz 2>/dev/null | sed -n "s/^Package: //p" | sort)
+    ' > ~/workspace/scripts/pkglist.txt 2>/dev/null || apt-mark showmanual | sort > ~/workspace/scripts/pkglist.txt
+else
+    apt-mark showmanual | sort > ~/workspace/scripts/pkglist.txt
+fi
 
 echo "Package list written to ~/workspace/scripts/pkglist.txt"
 
@@ -646,17 +709,56 @@ fi
 
 # Install Claude Code
 if ! command -v claude &>/dev/null; then
-    npm install -g @anthropic-ai/claude-code
+    sudo npm install -g @anthropic-ai/claude-code
+fi
+
+# Install cc-switch
+if ! command -v cc-switch &>/dev/null; then
+    CC_SWITCH_ARCH="$(dpkg --print-architecture)"
+    CC_SWITCH_TMP_DIR=$(mktemp -d)
+    CC_SWITCH_DEB_URL=$(curl -fsSL https://api.github.com/repos/farion1231/cc-switch/releases/latest | jq -r --arg arch "$CC_SWITCH_ARCH" '.assets[] | select(.name | endswith("-Linux-" + $arch + ".deb")) | .browser_download_url' | head -n 1)
+
+    if [[ -n "$CC_SWITCH_DEB_URL" && "$CC_SWITCH_DEB_URL" != "null" ]]; then
+        CC_SWITCH_DEB_PATH="$CC_SWITCH_TMP_DIR/$(basename "$CC_SWITCH_DEB_URL")"
+        curl -fL "$CC_SWITCH_DEB_URL" -o "$CC_SWITCH_DEB_PATH"
+        sudo apt update
+        sudo apt install -y "$CC_SWITCH_DEB_PATH" || echo "WARNING: cc-switch dependencies could not be resolved automatically."
+        rm -rf "$CC_SWITCH_TMP_DIR"
+    else
+        rm -rf "$CC_SWITCH_TMP_DIR"
+        echo "WARNING: could not find a cc-switch .deb asset matching architecture: $CC_SWITCH_ARCH"
+        echo "Install it manually from: https://github.com/farion1231/cc-switch/releases"
+    fi
 fi
 
 # Install Codex CLI
 if ! command -v codex &>/dev/null; then
-    npm install -g @openai/codex
+    sudo npm install -g @openai/codex
 fi
 
 # Install uv
 if ! command -v uv &>/dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+
+# Install Oh My Zsh
+if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+    RUNZSH=no CHSH=no \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+fi
+
+# Configure zsh shell
+if ! grep -q ".dev_env_exports" "$HOME/.zshrc" 2>/dev/null; then
+    echo "source ~/.dev_env_exports" >> "$HOME/.zshrc"
+fi
+
+ZSH_PATH="$(command -v zsh || true)"
+CURRENT_SHELL="$(getent passwd "$USER" | cut -d: -f7 2>/dev/null || true)"
+
+if [[ -n "$ZSH_PATH" ]] && grep -qx "$ZSH_PATH" /etc/shells 2>/dev/null; then
+    if [[ "$CURRENT_SHELL" != "$ZSH_PATH" ]]; then
+        chsh -s "$ZSH_PATH" "$USER" || sudo chsh -s "$ZSH_PATH" "$USER"
+    fi
 fi
 
 echo "Done."
@@ -684,11 +786,14 @@ echo "2. Verify:"
 echo ""
 echo "   node --version"
 echo "   claude --version"
+echo "   cc-switch --version"
 echo "   codex --version"
+echo "   zsh --version"
 echo "   python3 --version"
 echo "   clang++ --version"
 echo "   cmake --version"
 echo "   docker run hello-world"
+echo "   echo $SHELL"
 echo ""
 echo "3. Start Docker daemon:"
 echo ""
